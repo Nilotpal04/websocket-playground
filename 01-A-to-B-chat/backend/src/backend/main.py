@@ -1,6 +1,8 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.websockets import WebSocketDisconnect
 
+import json
+
 app = FastAPI()
 
 class ConnectionManager:
@@ -20,22 +22,43 @@ class ConnectionManager:
 
             if not connections:
                 del self.active_connections[username]
+    async def send_personal_message(self, message: str, receiver: str):
+        if receiver in self.active_connections:
+            for connection in self.active_connections[receiver]:
+                await connection.send_text(message)
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
+        else:
+            print(f"Message failed: {receiver} is not online")
 
 manager = ConnectionManager()
         
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+async def websocket_endpoint(websocket: WebSocket, username: str):
+    await manager.connect(websocket, username)
 
     try:
         while True:
-            message = await websocket.receive_text()
-            await manager.broadcast(message)
+            raw_message = await websocket.receive_text()
 
+            try:
+               data = json.loads(raw_message)
+            except json.JSONDecodeError:
+                await websocket.send_text("Error: Message must be valid JSON.")
+                continue
+            if not isinstance(data, dict):
+                await websocket.send_text("Error: Expected a JSON object.")
+                continue
+
+            receiver = data.get("receiver")
+            text = data.get("message")
+
+            formatted_message = f"From {username}: {text}"
+
+            if receiver and text:
+                await manager.send_personal_message(formatted_message, receiver)
+            else:
+                await websocket.send_text("Error: Receiver and message are required")
+                
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("Client disconnected!")
+        manager.disconnect(websocket, username)
+        print(f"Client {username} disconnected!")

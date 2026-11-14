@@ -31,3 +31,44 @@ class ConnectionManager:
         self.client_rooms[websocket] = room_key
 
         return room_key
+
+    def join_room(self, websocket: WebSocket, room_key: str) -> bool:
+        if room_key not in self.rooms:
+            return False
+
+        if websocket in self.client_rooms:
+            return False
+
+        self.rooms[room_key].append(websocket)
+        self.client_rooms[websocket] = room_key
+
+        return True
+
+    async def broadcast(self, message: str, room_key: str):
+        if room_key not in self.rooms:
+            return
+
+        for connection in self.rooms[room_key]:
+            await connection.send_text(message)
+
+    def disconnect(self, websocket: WebSocket, username: str):
+        if username in self.active_connections:
+            connections = self.active_connections[username]
+            if websocket in connections:
+                connections.remove(websocket)
+            if not connections:
+                del self.active_connections[username]
+
+        room_key = self.client_rooms.get(websocket)
+
+        if room_key is not None:
+            if room_key in self.rooms:
+                if websocket in self.rooms[room_key]:
+                    self.rooms[room_key].remove(websocket)
+
+                if not self.rooms[room_key]:
+                    del self.rooms[room_key]
+
+            del self.client_rooms[websocket]
+
+manager = ConnectionManager()

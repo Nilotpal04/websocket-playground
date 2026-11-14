@@ -16,7 +16,7 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.setdefault(username, []).append(websocket)
 
-    async def create_room(self, websocket: WebSocket) -> str:
+    def create_room(self, websocket: WebSocket) -> str:
 
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 

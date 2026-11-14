@@ -16,8 +16,11 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.setdefault(username, []).append(websocket)
 
-    def create_room(self, websocket: WebSocket) -> str:
+    def create_room(self, websocket: WebSocket) -> str | None:
 
+        if websocket in self.client_rooms:
+            return None
+        
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
         while True:
@@ -72,3 +75,98 @@ class ConnectionManager:
             del self.client_rooms[websocket]
 
 manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, username: str):
+    await manager.connect(websocket, username)
+
+    try:
+        while True:
+            raw_message = await websocket.receive_text()
+
+            try:
+                data = json.loads(raw_message)
+                if not isinstance(data, dict):
+                    await websocket.send_text("Error: Expected a JSON object")
+                    continue
+            except json.JSONDecodeError:
+                await websocket.send_text("Error: Invalid JSON format")
+                continue
+
+            action = data.get("type")
+
+            if action == "create_room":
+                room_key = manager.create_room(websocket)
+
+                if room_key is None:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "You are already in a room"
+                    })
+                    continue
+
+                await websocket.send_json({
+                    "type": "room_created",
+                    "room_key": room_key
+                })
+
+            elif action == "join_room":
+                room_key = data.get("room_key")
+
+                if not isinstance(room_key, str) or not room_key.strip():
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "A valid room key is required"
+                    })
+                    continue
+
+                room_key = room_key.strip().upper()
+
+                if websocket in manager.client_rooms:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "You are already in a room"
+                    })
+                    continue
+
+                success = manager.join_room(websocket, room_key)
+
+                if success:
+                    await websocket.send_text(json.dumps({
+                        "type": "room_joined",
+                        "room_key": room_key
+                    }))
+                else:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": "Invalid room key"
+                    }))
+
+            elif action == "send_message":
+                text = data.get("message")
+
+                if not isinstance(text, str) or not text.strip():
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "message cannot be empty"
+                    })
+                    continue
+
+                current_room = manager.client_rooms.get(websocket)
+
+                if current_room is None:
+                    await websocket.send_text("Error: You are not in a room!")
+                    continue
+
+                formatted_message = f"{username}: {text}"
+                await manager.broadcast(formatted_message, current_room)
+
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Unknown action"
+                })
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, username)
+        print(f"{username} disonnected")

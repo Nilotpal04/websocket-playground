@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room Chat</title>
+</head>
+<body>
+
+    <h1>Room Chat</h1>
+    
+    <section id="connection-section">
+        <h2>Connect</h2>
+        <input type="text" id="username" placeholder="Enter username">
+        <button id="connect-btn">Connect</button>
+        <p id="connection-status">Diconnected</p>
+    </section>
+
+    <section id="room-section" hidden>
+        <h2>Rooms</h2>
+        <button id="create-room-btn">Create Room</button>
+
+        <input type="text" id="room_key" placeholder="Enter room key">
+        <button id="current-room"></button>
+    </section>
+
+    <section id="chat-section" hidden>
+        <h2>Chat</h2>
+
+        <div id="messages"></div>
+        <input type="text" id="message-input" placeholder="Enter message">
+        <button id="send-btn">Send</button>
+    </section>
+    
+</body>
+</html>
